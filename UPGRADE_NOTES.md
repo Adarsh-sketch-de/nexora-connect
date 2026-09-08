@@ -31,3 +31,40 @@ For large group video rooms, a WebRTC mesh is not the final scaling architecture
 - Every active chat now has a Start video call / Start group meeting button.
 - Group meeting links use a deterministic room tied to the conversation (`chat-<conversationId>`), so group members can join the same room.
 - The current group meeting implementation is WebRTC mesh. TURN is still required for reliable cross-network connectivity; for large production meetings, migrate to an SFU.
+
+## Phase 2 moderation upgrade
+- User Report, Block and Unblock APIs.
+- Blocked users cannot start or continue private messages with each other.
+- Admin dashboard no longer loads private conversation/message content.
+- Admin user table now shows profile image, status, join date and moderation actions.
+- Admin can suspend, restore/unblock and soft-delete accounts.
+- Admin reports queue supports reviewed, resolved and dismissed states.
+- Existing MySQL deployments must run `database/phase2-moderation.sql` once before using these features.
+
+
+## Phase 4 — optional meeting summaries
+- Final live-transcript lines are saved to the meeting record.
+- Meeting participants can reload the saved transcript.
+- Participants can optionally generate and save a concise meeting summary.
+- Summary output includes overview, key points, decisions, action items and suggestions.
+- Summary language can be English, Hindi or Marathi.
+- Saved meeting summaries appear on the Summaries page and can be deleted by participants.
+- Saved transcripts can be deleted independently of existing summaries.
+- Run `database/phase4-meeting-summary.sql` once on an existing MySQL deployment.
+- If `OPENAI_API_KEY` is configured, Connect uses the AI summary path. Without it, Connect uses a local fallback summarizer.
+
+## Final pre-deployment UX/auth fixes
+- Password minimum reduced from 12 to 8 characters while retaining uppercase, lowercase, number, and symbol requirements.
+- Forgot-password UI now confirms the new password; reset emails continue to target the registered account email (SMTP_USER remains sender only).
+- Added emoji picker to private/group chat composer.
+- Added separate Audio Call and Video Call actions on desktop; on phone these actions live under the three-dot menu.
+- Enlarged responsive meeting/video stage.
+- Improved screen sharing: explicit unsupported/cancelled status, local share preview, stop-sharing control, and camera restoration after sharing ends.
+- Added audio-only meeting mode (`?mode=audio`) with microphone-only media capture.
+
+## Phase 5 — Notifications and read receipts
+- Real-time alert sound for new messages, incoming friend requests, and accepted requests (user can disable it in Settings).
+- Mobile hamburger menu shows total unread badge; Messages and Requests show category counts.
+- Persistent message receipt table tracks Sent, Delivered, and Read states.
+- Sender sees ✓ for sent, ✓✓ for delivered, and highlighted ✓✓ for read.
+- Run `database/phase5-notifications-receipts.sql` once on an existing database before starting this build.

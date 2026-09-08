@@ -125,3 +125,15 @@ The code avoids the Express 5 `app.get('*')` wildcard issue you encountered. It 
 - Shared images include a download action. For Railway production, move uploads to object storage because local filesystem storage is ephemeral.
 - AI summaries use OPENAI_API_KEY when configured; otherwise a concise local fallback is used.
 - Admin credentials come from ADMIN_EMAIL and ADMIN_PASSWORD. Change the example values in production.
+
+
+## Phase 4 — optional meeting summaries
+- Final live-transcript lines are saved to the meeting record.
+- Meeting participants can reload the saved transcript.
+- Participants can optionally generate and save a concise meeting summary.
+- Summary output includes overview, key points, decisions, action items and suggestions.
+- Summary language can be English, Hindi or Marathi.
+- Saved meeting summaries appear on the Summaries page and can be deleted by participants.
+- Saved transcripts can be deleted independently of existing summaries.
+- Run `database/phase4-meeting-summary.sql` once on an existing MySQL deployment.
+- If `OPENAI_API_KEY` is configured, Connect uses the AI summary path. Without it, Connect uses a local fallback summarizer.

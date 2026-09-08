@@ -1,1 +1,36 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meeting • Connect</title><link rel="stylesheet" href="/css/style.css"></head><body data-page="meeting"><header class="topbar"><a class="brand" href="/">◈ CONNECT</a><nav class="navlinks"><a class="hide-mobile" href="/features">Features</a><a class="hide-mobile" href="/help">Help</a><a href="/notifications">Notifications</a><button data-logout>Logout</button></nav></header><div class="shell"><aside class="sidebar"><div class="row" style="margin-bottom:18px"><img data-user-avatar class="avatar"><div><b data-user-name>User</b><div class="muted">Connect account</div></div></div><a href="/dashboard">Dashboard</a><a href="/discover">Discover users</a><a href="/requests">Requests</a><a href="/chat">Messages</a><a href="/meeting">Meeting room</a><a href="/history">History</a><a href="/summary">AI-style summaries</a><a href="/notifications">Notifications</a><a href="/profile">Profile</a><a href="/settings">Settings</a></aside><main class="content"><h1 class="section-title">Meeting room</h1><p class="muted">Share the same room ID with multiple signed-in users. Connect supports group meetings across different networks when TURN is configured.</p><div class="card"><div class="row"><input id="roomId" class="search" value="connect-demo" placeholder="Meeting room ID"><button id="joinMeeting" class="primary">Join room</button></div><p id="meetingStatus" class="muted">Not connected</p><div id="videoGrid" class="video-grid"><div class="video-wrap"><video id="localVideo" autoplay playsinline muted></video><span>You</span></div></div><div class="controls"><button id="muteBtn">Mute</button><button id="cameraBtn">Camera off</button><button id="screenBtn">Share screen</button></div></div><div class="notice warning" style="margin-top:16px">Connect uses STUN automatically. Configure TURN_URLS, TURN_USERNAME and TURN_CREDENTIAL on the server for reliable calls across restrictive Wi-Fi, mobile and corporate networks.</div></main></div><footer class="footer"><div>© 2026 Connect • Functional MVP</div><div><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a><a href="/admin" class="admin-login-link">Administrator Login</a></div></footer><script src="/socket.io/socket.io.js"></script><script src="/js/app.js"></script></body></html>
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Meeting • Connect</title><link rel="stylesheet" href="/css/style.css"></head><body data-page="meeting"><header class="topbar"><a class="brand" href="/">◈ CONNECT</a><nav class="navlinks"><a class="hide-mobile" href="/features">Features</a><a class="hide-mobile" href="/help">Help</a><a href="/notifications">Notifications</a><button data-logout>Logout</button></nav></header><div class="shell"><aside class="sidebar"><div class="row" style="margin-bottom:18px"><img data-user-avatar class="avatar"><div><b data-user-name>User</b><div class="muted">Connect account</div></div></div><a href="/dashboard">Dashboard</a><a href="/discover">Discover users</a><a href="/requests">Requests</a><a href="/chat">Messages</a><a href="/meeting">Meeting room</a><a href="/history">History</a><a href="/summary">AI-style summaries</a><a href="/notifications">Notifications</a><a href="/profile">Profile</a><a href="/settings">Settings</a></aside><main class="content"><div class="row between"><h1 class="section-title">Meeting room</h1><span id="callModeBadge" class="chip">Video call</span></div><p class="muted">Share the same room ID with multiple signed-in users. Connect supports group meetings across different networks when TURN is configured.</p><div class="card"><div class="row"><input id="roomId" class="search" value="connect-demo" placeholder="Meeting room ID"><button id="joinMeeting" class="primary">Join room</button></div><p id="meetingStatus" class="muted">Not connected</p><div id="videoGrid" class="video-grid"><div class="video-wrap"><video id="localVideo" autoplay playsinline muted></video><span>You</span></div></div><div class="controls"><button id="muteBtn">Mute</button><button id="cameraBtn">Camera off</button><button id="screenBtn">Share screen</button></div><p id="screenShareStatus" class="muted" style="text-align:center"></p>
+<div class="transcription-panel">
+  <div class="row between transcription-head">
+    <div><h3>Live transcription</h3><p class="muted">Optional live captions. Everyone in the room can see when transcription is active.</p></div>
+    <span id="transcriptionIndicator" class="chip">Off</span>
+  </div>
+  <div class="transcription-controls">
+    <select id="transcriptionLanguage" aria-label="Transcription language">
+      <option value="en-IN">English (India)</option>
+      <option value="hi-IN">हिन्दी (Hindi)</option>
+      <option value="mr-IN">मराठी (Marathi)</option>
+      <option value="en-US">English (US)</option>
+    </select>
+    <button id="transcriptionBtn">Start transcription</button>
+    <button id="clearTranscriptBtn">Clear on this device</button>
+  </div>
+  <p id="transcriptionSupport" class="muted"></p>
+  <div id="liveTranscript" class="live-transcript" aria-live="polite"><p class="muted">Transcript will appear here when transcription starts.</p></div>
+
+  <div class="meeting-summary-panel">
+    <div class="row between summary-head"><div><h3>Meeting summary</h3><p class="muted">Optional. Generate a concise summary from the saved transcript after or during the meeting.</p></div><span class="chip">AI-ready</span></div>
+    <div class="summary-controls">
+      <select id="meetingSummaryLanguage" aria-label="Summary language">
+        <option value="en">English summary</option>
+        <option value="hi">हिन्दी सारांश</option>
+        <option value="mr">मराठी सारांश</option>
+      </select>
+      <button id="generateMeetingSummary" class="primary">Generate summary</button>
+      <button id="loadSavedTranscript">Load saved transcript</button>
+      <button id="deleteSavedTranscript" class="danger">Delete saved transcript</button>
+    </div>
+    <p id="meetingSummaryStatus" class="muted"></p>
+    <div id="meetingSummaryResult" class="meeting-summary-result"><p class="muted">No meeting summary generated yet.</p></div>
+  </div>
+</div>
+</div><div class="notice warning" style="margin-top:16px">Connect uses STUN/TURN from the server configuration for reliable calls across different Wi-Fi, mobile and corporate networks. Live transcription is optional and participants are visibly informed when it is active.</div></main></div><footer class="footer"><div>© 2026 Connect • Functional MVP</div><div><a href="/terms">Terms</a><a href="/privacy">Privacy</a><a href="/contact">Contact</a><a href="/admin" class="admin-login-link">Administrator Login</a></div></footer><script src="/socket.io/socket.io.js"></script><script src="/js/app.js"></script></body></html>

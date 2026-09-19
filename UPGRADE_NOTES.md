@@ -68,3 +68,25 @@ For large group video rooms, a WebRTC mesh is not the final scaling architecture
 - Persistent message receipt table tracks Sent, Delivered, and Read states.
 - Sender sees ✓ for sent, ✓✓ for delivered, and highlighted ✓✓ for read.
 - Run `database/phase5-notifications-receipts.sql` once on an existing database before starting this build.
+
+## Meeting reliability fix
+- WebRTC peers now reserve audio/video transceivers, so screen sharing works even if the sharing PC has no webcam.
+- Remote media is assembled track-by-track instead of assuming a single incoming MediaStream.
+- New server-side chunked transcription endpoint uses OpenAI speech-to-text when `OPENAI_API_KEY` is configured.
+- Browser speech recognition remains a fallback when AI transcription is not configured.
+- Meeting summary errors now explain when no saved transcript exists.
+
+## Reliability update 2
+- Microphone acquisition now requests audio independently from camera and retries microphone access when transcription starts.
+- Screen-share video uses contain scaling so the entire shared desktop remains visible.
+- Meeting tiles receive participant usernames instead of the generic Participant label.
+- Added Leave Call for everyone and host-only End Call / End Meeting.
+- Opening a conversation now marks that conversation's message notifications read, allowing mobile unread badges to clear to zero.
+- Existing groups now have Group Info with member list, admin add/remove controls, and Leave Group.
+
+
+## Reliability repair 2026-09
+- Restored host End Call/End Meeting and participant Leave Call controls after a transcription-only patch regression.
+- Restored actual participant usernames/profile labels in meeting tiles and signaling.
+- Normalized MediaRecorder MIME types before upload, lengthened audio segments, and added Whisper fallback for transcription compatibility.
+- If server transcription fails but browser SpeechRecognition is available, Connect automatically switches to browser live transcription instead of stopping.

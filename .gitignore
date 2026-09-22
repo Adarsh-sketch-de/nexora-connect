@@ -4,6 +4,3 @@ data/db.json
 public/uploads/
 npm-debug.log*
 .DS_Store
-.env.*
-!.env.example
-__pycache__/

@@ -139,17 +139,17 @@ async function initChat(){
   await loadConvos();
 }
 async function initMeeting(){
-  const user=await requireUser(),socket=io(),local=qs('#localVideo'),grid=qs('#videoGrid'),roomInput=qs('#roomId'),joinBtn=qs('#joinMeeting'),muteBtn=qs('#muteBtn'),cameraBtn=qs('#cameraBtn'),screenBtn=qs('#screenBtn'),status=qs('#meetingStatus');
+  const user=await requireUser(),socket=io(),local=qs('#localVideo'),grid=qs('#videoGrid'),roomInput=qs('#roomId'),joinBtn=qs('#joinMeeting'),muteBtn=qs('#muteBtn'),cameraBtn=qs('#cameraBtn'),flipCameraBtn=qs('#flipCameraBtn'),screenBtn=qs('#screenBtn'),status=qs('#meetingStatus');
   const transcriptionBtn=qs('#transcriptionBtn'),languageSelect=qs('#transcriptionLanguage'),transcriptEl=qs('#liveTranscript'),supportEl=qs('#transcriptionSupport'),indicator=qs('#transcriptionIndicator'),clearTranscriptBtn=qs('#clearTranscriptBtn');
   const summaryLanguage=qs('#meetingSummaryLanguage'),summaryBtn=qs('#generateMeetingSummary'),summaryStatus=qs('#meetingSummaryStatus'),summaryResult=qs('#meetingSummaryResult'),loadTranscriptBtn=qs('#loadSavedTranscript'),deleteTranscriptBtn=qs('#deleteSavedTranscript');
   const params=new URLSearchParams(location.search),conversationId=Number(params.get('conversation'))||null,callMode=params.get('mode')==='audio'?'audio':'video',modeBadge=qs('#callModeBadge'),screenStatus=qs('#screenShareStatus'),leaveCallBtn=qs('#leaveCallBtn'),endCallBtn=qs('#endCallBtn');
   if(params.get('room'))roomInput.value=params.get('room');
   if(modeBadge)modeBadge.textContent=callMode==='audio'?'Audio call':'Video call';
-  if(callMode==='audio'){cameraBtn.disabled=true;cameraBtn.textContent='Camera unavailable';local.closest('.video-wrap')?.classList.add('audio-only')}
+  if(callMode==='audio'){cameraBtn.disabled=true;cameraBtn.textContent='Camera unavailable';if(flipCameraBtn)flipCameraBtn.disabled=true;local.closest('.video-wrap')?.classList.add('audio-only')}
   if(!navigator.mediaDevices?.getDisplayMedia){screenBtn.disabled=true;if(screenStatus)screenStatus.textContent='Screen sharing is not supported by this browser/device.'}
 
-  let stream=null,screenStream=null,room='',config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]},transcribing=false,segmentRecorder=null,segmentTimer=null,browserRecognition=null,manualStop=false;
-  const peers=new Map(),peerMedia=new Map();
+  let stream=null,screenStream=null,room='',config={iceServers:[{urls:'stun:stun.l.google.com:19302'}]},transcribing=false,segmentRecorder=null,segmentTimer=null,browserRecognition=null,manualStop=false,cameraFacing='user';
+  const peers=new Map(),peerMedia=new Map(),pendingIce=new Map();
   try{config=await api('/api/webrtc/config')}catch(e){console.warn('ICE config fallback',e)}
 
   async function ensureMedia(){
@@ -158,7 +158,7 @@ async function initMeeting(){
     if(!navigator.mediaDevices?.getUserMedia){status.textContent='Media capture is unavailable on this browser. You can still receive the meeting and may share your screen.';local.srcObject=stream;return stream}
     // Request microphone and camera independently. A missing camera must never make a working microphone look unavailable.
     try{const a=await navigator.mediaDevices.getUserMedia({audio:true,video:false});a.getAudioTracks().forEach(t=>stream.addTrack(t))}catch(e){if(!['NotFoundError','DevicesNotFoundError','OverconstrainedError','NotAllowedError'].includes(e.name))console.warn('Microphone:',e)}
-    if(callMode==='video'){try{const v=await navigator.mediaDevices.getUserMedia({video:true,audio:false});v.getVideoTracks().forEach(t=>stream.addTrack(t))}catch(e){if(!['NotFoundError','DevicesNotFoundError','OverconstrainedError','NotAllowedError'].includes(e.name))console.warn('Camera:',e)}}
+    if(callMode==='video'){try{const v=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:cameraFacing}},audio:false});v.getVideoTracks().forEach(t=>stream.addTrack(t))}catch(e){if(!['NotFoundError','DevicesNotFoundError','OverconstrainedError','NotAllowedError'].includes(e.name))console.warn('Camera:',e)}}
     local.srcObject=stream;
     if(!stream.getAudioTracks().length&&!stream.getVideoTracks().length)status.textContent='Joined in receive-only mode. No camera/microphone permission is available on this device.';
     else if(!stream.getAudioTracks().length)status.textContent='Camera available, but microphone access is unavailable.';
@@ -169,7 +169,7 @@ async function initMeeting(){
   async function ensureAudioTrack(){let t=currentAudioTrack();if(t)return t;if(!navigator.mediaDevices?.getUserMedia)return null;try{const a=await navigator.mediaDevices.getUserMedia({audio:true,video:false});if(!stream)stream=new MediaStream();a.getAudioTracks().forEach(track=>stream.addTrack(track));local.srcObject=stream;for(const pc of peers.values()){const sender=senderForKind(pc,'audio');if(sender)await sender.replaceTrack(currentAudioTrack())}return currentAudioTrack()}catch(e){supportEl.textContent=e.name==='NotAllowedError'?'Microphone permission is blocked. Allow microphone access for Connect and try again.':e.name==='NotFoundError'?'Windows reports no microphone to this browser. Check Chrome/Edge microphone input and permission.':`Microphone error: ${e.message}`;return null}}
   function currentVideoTrack(){return screenStream?.getVideoTracks()[0]||stream?.getVideoTracks()[0]||null}
   function remoteBox(id,name='Participant',avatarUrl=''){let box=qs(`[data-peer="${id}"]`);if(!box){box=document.createElement('div');box.className='video-wrap';box.dataset.peer=id;box.innerHTML='<video autoplay playsinline></video><span class="meeting-peer-label"></span>';grid.appendChild(box)}const label=box.querySelector('.meeting-peer-label');if(label)label.innerHTML=`${avatarUrl?`<img src="${escapeHtml(avatarUrl)}">`:''}<b>${escapeHtml(name||'Participant')}</b>`;return box}
-  function removePeer(id){const pc=peers.get(id);if(pc){pc.close();peers.delete(id)}peerMedia.delete(id);qs(`[data-peer="${id}"]`)?.remove()}
+  function removePeer(id){const pc=peers.get(id);if(pc){pc.close();peers.delete(id)}peerMedia.delete(id);pendingIce.delete(id);qs(`[data-peer="${id}"]`)?.remove()}
   function senderForKind(pc,kind){return pc.getTransceivers().find(t=>t.receiver?.track?.kind===kind)?.sender||null}
   async function syncPeerTracks(pc){
     const a=senderForKind(pc,'audio'),v=senderForKind(pc,'video');
@@ -182,10 +182,11 @@ async function initMeeting(){
     pc.addTransceiver('audio',{direction:'sendrecv'});
     pc.addTransceiver('video',{direction:'sendrecv'});
     syncPeerTracks(pc).catch(console.warn);
-    const remoteStream=new MediaStream();peerMedia.set(id,remoteStream);remoteBox(id,name,avatarUrl).querySelector('video').srcObject=remoteStream;
-    pc.ontrack=e=>{if(!remoteStream.getTracks().some(t=>t.id===e.track.id))remoteStream.addTrack(e.track);remoteBox(id,name,avatarUrl).querySelector('video').srcObject=remoteStream};
+    const remoteStream=new MediaStream();peerMedia.set(id,remoteStream);const remoteVideo=remoteBox(id,name,avatarUrl).querySelector('video');remoteVideo.srcObject=remoteStream;
+    const tryPlay=()=>remoteVideo.play().catch(()=>{status.textContent='Connected. Tap the participant video once if your browser blocks remote audio/video playback.';remoteVideo.onclick=()=>remoteVideo.play().catch(()=>{})});
+    pc.ontrack=e=>{const incoming=e.streams?.[0];if(incoming){for(const track of incoming.getTracks())if(!remoteStream.getTracks().some(t=>t.id===track.id))remoteStream.addTrack(track)}else if(!remoteStream.getTracks().some(t=>t.id===e.track.id))remoteStream.addTrack(e.track);remoteVideo.srcObject=remoteStream;tryPlay()};
     pc.onicecandidate=e=>{if(e.candidate)socket.emit('webrtc-ice',{target:id,candidate:e.candidate})};
-    pc.onconnectionstatechange=()=>{if(['failed','closed'].includes(pc.connectionState))removePeer(id)};
+    pc.onconnectionstatechange=()=>{if(pc.connectionState==='connected'){status.textContent=`Connected with ${name}`;tryPlay()}else if(['failed','closed'].includes(pc.connectionState))removePeer(id)};
     return pc
   }
   async function callPeer(peer){const id=typeof peer==='string'?peer:peer.socketId,name=typeof peer==='string'?'Participant':peer.username,avatarUrl=typeof peer==='string'?'':peer.avatar_url;const pc=createPeer(id,name,avatarUrl);await syncPeerTracks(pc);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('webrtc-offer',{room,target:id,offer})}
@@ -193,14 +194,78 @@ async function initMeeting(){
   socket.on('meeting-peers',async d=>{if(endCallBtn){endCallBtn.hidden=!d.isHost;endCallBtn.textContent=callMode==='audio'?'End call':'End meeting'}for(const p of d.peers||[])await callPeer(p)});
   socket.on('peer-joined',d=>{remoteBox(d.socketId,d.username,d.avatar_url);status.textContent=`${d.username} joined the meeting`});
   socket.on('peer-left',d=>removePeer(d.socketId));
-  socket.on('webrtc-offer',async d=>{if(!stream)await ensureMedia();const pc=createPeer(d.from,d.username||'Participant',d.avatar_url||'');await pc.setRemoteDescription(d.offer);await syncPeerTracks(pc);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('webrtc-answer',{target:d.from,answer});status.textContent=`Connected with ${d.username}`});
-  socket.on('webrtc-answer',async d=>{const pc=peers.get(d.from);if(pc)await pc.setRemoteDescription(d.answer)});
-  socket.on('webrtc-ice',async d=>{try{const pc=peers.get(d.from)||createPeer(d.from);if(pc.remoteDescription)await pc.addIceCandidate(d.candidate);else setTimeout(()=>pc.addIceCandidate(d.candidate).catch(console.warn),250)}catch(e){console.warn(e)}});
+  async function flushIce(id,pc){const queued=pendingIce.get(id)||[];pendingIce.delete(id);for(const candidate of queued){try{await pc.addIceCandidate(candidate)}catch(e){console.warn('ICE candidate:',e)}}}
+  socket.on('webrtc-offer',async d=>{try{if(!stream)await ensureMedia();const pc=createPeer(d.from,d.username||'Participant',d.avatar_url||'');await pc.setRemoteDescription(d.offer);await flushIce(d.from,pc);await syncPeerTracks(pc);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('webrtc-answer',{target:d.from,answer});status.textContent=`Connecting with ${d.username}…`}catch(e){console.warn('WebRTC offer:',e);status.textContent='Could not complete the incoming call connection: '+e.message}});
+  socket.on('webrtc-answer',async d=>{try{const pc=peers.get(d.from);if(pc){await pc.setRemoteDescription(d.answer);await flushIce(d.from,pc)}}catch(e){console.warn('WebRTC answer:',e)}});
+  socket.on('webrtc-ice',async d=>{try{const pc=peers.get(d.from)||createPeer(d.from);if(pc.remoteDescription?.type)await pc.addIceCandidate(d.candidate);else{const queued=pendingIce.get(d.from)||[];queued.push(d.candidate);pendingIce.set(d.from,queued)}}catch(e){console.warn('WebRTC ICE:',e)}});
   leaveCallBtn?.addEventListener('click',()=>{if(room)socket.emit('leave-meeting',room);for(const id of [...peers.keys()])removePeer(id);stream?.getTracks().forEach(t=>t.stop());screenStream?.getTracks().forEach(t=>t.stop());location.href=conversationId?`/chat?id=${conversationId}`:'/chat'});
   endCallBtn?.addEventListener('click',()=>{if(!room||!confirm(callMode==='audio'?'End this call for everyone?':'End this meeting for everyone?'))return;socket.emit('end-meeting',room)});
   socket.on('meeting-ended',d=>{alert(`${d.by||'Host'} ended the ${callMode==='audio'?'call':'meeting'}.`);location.href=conversationId?`/chat?id=${conversationId}`:'/chat'});
   muteBtn.onclick=async()=>{try{await ensureMedia();const t=currentAudioTrack();if(!t)return status.textContent='No microphone is available on this device.';t.enabled=!t.enabled;muteBtn.textContent=t.enabled?'Mute':'Unmute'}catch(e){status.textContent=e.message}};
   cameraBtn.onclick=async()=>{try{await ensureMedia();const t=stream?.getVideoTracks()[0];if(!t)return status.textContent='No camera is available on this device.';t.enabled=!t.enabled;cameraBtn.textContent=t.enabled?'Camera off':'Camera on'}catch(e){status.textContent=e.message}};
+  if(flipCameraBtn)flipCameraBtn.onclick=async()=>{
+  if(callMode!=='video'||screenStream)return;
+
+  try{
+    if(!window.isSecureContext){
+      throw new Error('Camera switching requires HTTPS or localhost.');
+    }
+
+    if(!navigator.mediaDevices?.getUserMedia){
+      throw new Error('Camera switching is not supported by this browser/device.');
+    }
+
+    await ensureMedia();
+
+    const oldTrack=stream?.getVideoTracks()[0];
+    const previousFacing=cameraFacing;
+    const newFacing=cameraFacing==='user'?'environment':'user';
+
+    const next=await navigator.mediaDevices.getUserMedia({
+      video:{
+        facingMode:{ideal:newFacing}
+      },
+      audio:false
+    });
+
+    const newTrack=next.getVideoTracks()[0];
+
+    if(!newTrack){
+      next.getTracks().forEach(t=>t.stop());
+      throw new Error('No alternate camera is available.');
+    }
+
+    cameraFacing=newFacing;
+
+    if(oldTrack){
+      stream.removeTrack(oldTrack);
+    }
+
+    stream.addTrack(newTrack);
+    local.srcObject=stream;
+
+    for(const pc of peers.values()){
+      const sender=senderForKind(pc,'video');
+      if(sender)await sender.replaceTrack(newTrack);
+    }
+
+    if(oldTrack)oldTrack.stop();
+
+    flipCameraBtn.textContent=
+      cameraFacing==='user'?'Flip camera':'Flip to front';
+
+    status.textContent=
+      cameraFacing==='user'
+        ?'Front camera active.'
+        :'Rear camera active.';
+
+  }catch(e){
+    status.textContent=
+      e.name==='OverconstrainedError'
+        ?'This device does not provide the requested camera.'
+        :`Could not flip camera: ${e.message}`;
+  }
+};
   async function stopScreenShare(){
     if(screenStream){screenStream.getTracks().forEach(t=>t.stop());screenStream=null}
     for(const pc of peers.values()){const sender=senderForKind(pc,'video');if(sender)await sender.replaceTrack(stream?.getVideoTracks()[0]||null)}

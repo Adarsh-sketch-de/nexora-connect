@@ -181,7 +181,6 @@ async function initMeeting(){
     const pc=new RTCPeerConnection(config);peers.set(id,pc);
     pc.addTransceiver('audio',{direction:'sendrecv'});
     pc.addTransceiver('video',{direction:'sendrecv'});
-    syncPeerTracks(pc).catch(console.warn);
     const remoteStream=new MediaStream();peerMedia.set(id,remoteStream);const remoteVideo=remoteBox(id,name,avatarUrl).querySelector('video');remoteVideo.srcObject=remoteStream;
     const tryPlay=()=>remoteVideo.play().catch(()=>{status.textContent='Connected. Tap the participant video once if your browser blocks remote audio/video playback.';remoteVideo.onclick=()=>remoteVideo.play().catch(()=>{})});
     pc.ontrack=e=>{const incoming=e.streams?.[0];if(incoming){for(const track of incoming.getTracks())if(!remoteStream.getTracks().some(t=>t.id===track.id))remoteStream.addTrack(track)}else if(!remoteStream.getTracks().some(t=>t.id===e.track.id))remoteStream.addTrack(e.track);remoteVideo.srcObject=remoteStream;tryPlay()};

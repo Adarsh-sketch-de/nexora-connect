@@ -170,21 +170,19 @@ async function initMeeting(){
   function currentVideoTrack(){return screenStream?.getVideoTracks()[0]||stream?.getVideoTracks()[0]||null}
   function remoteBox(id,name='Participant',avatarUrl=''){let box=qs(`[data-peer="${id}"]`);if(!box){box=document.createElement('div');box.className='video-wrap';box.dataset.peer=id;box.innerHTML='<video autoplay playsinline></video><span class="meeting-peer-label"></span>';grid.appendChild(box)}const label=box.querySelector('.meeting-peer-label');if(label)label.innerHTML=`${avatarUrl?`<img src="${escapeHtml(avatarUrl)}">`:''}<b>${escapeHtml(name||'Participant')}</b>`;return box}
   function removePeer(id){const pc=peers.get(id);if(pc){pc.close();peers.delete(id)}peerMedia.delete(id);pendingIce.delete(id);qs(`[data-peer="${id}"]`)?.remove()}
-  function senderForKind(pc,kind){
-  return pc.getSenders().find(s=>s.track?.kind===kind)
-    || pc.getTransceivers().find(t=>t.receiver?.track?.kind===kind)?.sender
-    || null;
-}
+  function transceiverForKind(pc,kind){const all=pc.getTransceivers().filter(t=>t.receiver?.track?.kind===kind&&t.currentDirection!=='stopped');return all.find(t=>t.mid!==null)||all[0]||null}
+  function senderForKind(pc,kind){return transceiverForKind(pc,kind)?.sender||null}
   async function syncPeerTracks(pc){
-    const a=senderForKind(pc,'audio'),v=senderForKind(pc,'video');
-    if(a)await a.replaceTrack(currentAudioTrack());
-    if(v)await v.replaceTrack(currentVideoTrack());
+    for(const [kind,track] of [['audio',currentAudioTrack()],['video',currentVideoTrack()]]){
+      const tr=transceiverForKind(pc,kind);if(!tr)continue;
+      // A transceiver created from a remote offer defaults to recvonly. Without this the answerer never sends media.
+      if(tr.direction==='recvonly'||tr.direction==='inactive')tr.direction='sendrecv';
+      await tr.sender.replaceTrack(track);
+    }
   }
   function createPeer(id,name='Participant',avatarUrl=''){
     if(peers.has(id))return peers.get(id);
     const pc=new RTCPeerConnection(config);peers.set(id,pc);
-    pc.addTransceiver('audio',{direction:'sendrecv'});
-    pc.addTransceiver('video',{direction:'sendrecv'});
     const remoteStream=new MediaStream();peerMedia.set(id,remoteStream);const remoteVideo=remoteBox(id,name,avatarUrl).querySelector('video');remoteVideo.srcObject=remoteStream;
     const tryPlay=()=>remoteVideo.play().catch(()=>{status.textContent='Connected. Tap the participant video once if your browser blocks remote audio/video playback.';remoteVideo.onclick=()=>remoteVideo.play().catch(()=>{})});
     pc.ontrack=e=>{const incoming=e.streams?.[0];if(incoming){for(const track of incoming.getTracks())if(!remoteStream.getTracks().some(t=>t.id===track.id))remoteStream.addTrack(track)}else if(!remoteStream.getTracks().some(t=>t.id===e.track.id))remoteStream.addTrack(e.track);remoteVideo.srcObject=remoteStream;tryPlay()};
@@ -192,13 +190,13 @@ async function initMeeting(){
     pc.onconnectionstatechange=()=>{if(pc.connectionState==='connected'){status.textContent=`Connected with ${name}`;tryPlay()}else if(['failed','closed'].includes(pc.connectionState))removePeer(id)};
     return pc
   }
-  async function callPeer(peer){const id=typeof peer==='string'?peer:peer.socketId,name=typeof peer==='string'?'Participant':peer.username,avatarUrl=typeof peer==='string'?'':peer.avatar_url;const pc=createPeer(id,name,avatarUrl);await syncPeerTracks(pc);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('webrtc-offer',{room,target:id,offer})}
+  async function callPeer(peer){const id=typeof peer==='string'?peer:peer.socketId,name=typeof peer==='string'?'Participant':peer.username,avatarUrl=typeof peer==='string'?'':peer.avatar_url;const pc=createPeer(id,name,avatarUrl);if(!pc.getTransceivers().length){pc.addTransceiver('audio',{direction:'sendrecv'});pc.addTransceiver('video',{direction:'sendrecv'})}await syncPeerTracks(pc);const offer=await pc.createOffer();await pc.setLocalDescription(offer);socket.emit('webrtc-offer',{room,target:id,offer})}
   joinBtn.onclick=async()=>{try{room=roomInput.value.trim()||'connect-demo';await ensureMedia();socket.emit('join-meeting',{room,conversationId});status.textContent='Joined room: '+room;joinBtn.disabled=true;await loadSavedTranscript()}catch(e){status.textContent=e.name==='NotAllowedError'?'Camera/microphone permission was denied. You can allow it and try again.':e.message}};
   socket.on('meeting-peers',async d=>{if(endCallBtn){endCallBtn.hidden=!d.isHost;endCallBtn.textContent=callMode==='audio'?'End call':'End meeting'}for(const p of d.peers||[])await callPeer(p)});
   socket.on('peer-joined',d=>{remoteBox(d.socketId,d.username,d.avatar_url);status.textContent=`${d.username} joined the meeting`});
   socket.on('peer-left',d=>removePeer(d.socketId));
   async function flushIce(id,pc){const queued=pendingIce.get(id)||[];pendingIce.delete(id);for(const candidate of queued){try{await pc.addIceCandidate(candidate)}catch(e){console.warn('ICE candidate:',e)}}}
-  socket.on('webrtc-offer',async d=>{try{if(!stream)await ensureMedia();const pc=createPeer(d.from,d.username||'Participant',d.avatar_url||'');await pc.setRemoteDescription(d.offer);await flushIce(d.from,pc);await syncPeerTracks(pc);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('webrtc-answer',{target:d.from,answer});status.textContent=`Connecting with ${d.username}…`}catch(e){console.warn('WebRTC offer:',e);status.textContent='Could not complete the incoming call connection: '+e.message}});
+  socket.on('webrtc-offer',async d=>{try{if(!stream)await ensureMedia();remoteBox(d.from,d.username||'Participant',d.avatar_url||'');const pc=createPeer(d.from,d.username||'Participant',d.avatar_url||'');await pc.setRemoteDescription(d.offer);await flushIce(d.from,pc);await syncPeerTracks(pc);const answer=await pc.createAnswer();await pc.setLocalDescription(answer);socket.emit('webrtc-answer',{target:d.from,answer});status.textContent=`Connecting with ${d.username}…`}catch(e){console.warn('WebRTC offer:',e);status.textContent='Could not complete the incoming call connection: '+e.message}});
   socket.on('webrtc-answer',async d=>{try{const pc=peers.get(d.from);if(pc){await pc.setRemoteDescription(d.answer);await flushIce(d.from,pc)}}catch(e){console.warn('WebRTC answer:',e)}});
   socket.on('webrtc-ice',async d=>{try{const pc=peers.get(d.from)||createPeer(d.from);if(pc.remoteDescription?.type)await pc.addIceCandidate(d.candidate);else{const queued=pendingIce.get(d.from)||[];queued.push(d.candidate);pendingIce.set(d.from,queued)}}catch(e){console.warn('WebRTC ICE:',e)}});
   leaveCallBtn?.addEventListener('click',()=>{if(room)socket.emit('leave-meeting',room);for(const id of [...peers.keys()])removePeer(id);stream?.getTracks().forEach(t=>t.stop());screenStream?.getTracks().forEach(t=>t.stop());location.href=conversationId?`/chat?id=${conversationId}`:'/chat'});

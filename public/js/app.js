@@ -170,7 +170,11 @@ async function initMeeting(){
   function currentVideoTrack(){return screenStream?.getVideoTracks()[0]||stream?.getVideoTracks()[0]||null}
   function remoteBox(id,name='Participant',avatarUrl=''){let box=qs(`[data-peer="${id}"]`);if(!box){box=document.createElement('div');box.className='video-wrap';box.dataset.peer=id;box.innerHTML='<video autoplay playsinline></video><span class="meeting-peer-label"></span>';grid.appendChild(box)}const label=box.querySelector('.meeting-peer-label');if(label)label.innerHTML=`${avatarUrl?`<img src="${escapeHtml(avatarUrl)}">`:''}<b>${escapeHtml(name||'Participant')}</b>`;return box}
   function removePeer(id){const pc=peers.get(id);if(pc){pc.close();peers.delete(id)}peerMedia.delete(id);pendingIce.delete(id);qs(`[data-peer="${id}"]`)?.remove()}
-  function senderForKind(pc,kind){return pc.getTransceivers().find(t=>t.receiver?.track?.kind===kind)?.sender||null}
+  function senderForKind(pc,kind){
+  return pc.getSenders().find(s=>s.track?.kind===kind)
+    || pc.getTransceivers().find(t=>t.receiver?.track?.kind===kind)?.sender
+    || null;
+}
   async function syncPeerTracks(pc){
     const a=senderForKind(pc,'audio'),v=senderForKind(pc,'video');
     if(a)await a.replaceTrack(currentAudioTrack());
